@@ -41,13 +41,14 @@ sudo ip link set SW1 up
 # assign IP addresses (10.0.1.0/24)
 sudo ip netns exec H1 ip addr add 10.0.1.1/24 dev veth1
 sudo ip netns exec H2 ip addr add 10.0.1.2/24 dev veth2
-sudo ip netns exec H3 ip addr add 10.0.1.3/24 dev veth3
-sudo ip netns exec H4 ip addr add 10.0.1.4/24 dev veth4
+sudo ip netns exec H3 ip addr add 10.0.2.1/24 dev veth3
+sudo ip netns exec H4 ip addr add 10.0.2.2/24 dev veth4
 
 # verify topology
 sudo ovs-vsctl show
 
 # test connectivity
 sudo ip netns exec H1 ping 10.0.1.2
-sudo ip netns exec H1 ping 10.0.1.3
-sudo ip netns exec H1 ping 10.0.1.4
+sudo ip netns exec H1 ping 10.0.2.1
+sudo ip netns exec H1 ping 10.0.2.2
+sudo ip netns exec H3 ping 10.0.2.2
