@@ -8,6 +8,7 @@ sudo ip netns add H22
 sudo ip netns add R1
 sudo ip netns add R2
 sudo ip netns add R3
+sudo ip netns add R4
 
 # ── Switches ──────────────────────────────────────────────
 sudo ovs-vsctl add-br SW1
@@ -67,6 +68,20 @@ sudo ip link set veth-R3-R2 netns R3
 sudo ip netns exec R2 ip link set veth-R2-R3 up
 sudo ip netns exec R3 ip link set veth-R3-R2 up
 
+# --- R1 ↔ R4 (192.168.0.8/30) ---
+sudo ip link add veth-R1-R4 address "00:00:00:ee:ee:01" type veth peer name veth-R4-R1 address "00:00:00:ee:ee:02"
+sudo ip link set veth-R1-R4 netns R1
+sudo ip link set veth-R4-R1 netns R4
+sudo ip netns exec R1 ip link set veth-R1-R4 up
+sudo ip netns exec R4 ip link set veth-R4-R1 up
+
+# --- R2 ↔ R4 (192.168.0.12/30) ---
+sudo ip link add veth-R2-R4 address "00:00:00:ff:ff:01" type veth peer name veth-R4-R2 address "00:00:00:ff:ff:02"
+sudo ip link set veth-R2-R4 netns R2
+sudo ip link set veth-R4-R2 netns R4
+sudo ip netns exec R2 ip link set veth-R2-R4 up
+sudo ip netns exec R4 ip link set veth-R4-R2 up
+
 # ── IP Addresses ──────────────────────────────────────────
 # Hosts
 sudo ip netns exec H11 ip addr add 10.0.1.1/24 dev veth0
@@ -77,19 +92,26 @@ sudo ip netns exec H22 ip addr add 10.0.2.2/24 dev veth0
 # R1
 sudo ip netns exec R1 ip addr add 10.0.1.254/24   dev veth-R1-sw   # LAN side → SW1
 sudo ip netns exec R1 ip addr add 192.168.0.1/30  dev veth-R1-R3   # WAN side → R3
+sudo ip netns exec R1 ip addr add 192.168.0.9/30  dev veth-R1-R4   # WAN side → R4
 
 # R2
 sudo ip netns exec R2 ip addr add 10.0.2.254/24   dev veth-R2-sw   # LAN side → SW2
 sudo ip netns exec R2 ip addr add 192.168.0.5/30  dev veth-R2-R3   # WAN side → R3
+sudo ip netns exec R2 ip addr add 192.168.0.13/30 dev veth-R2-R4   # WAN side → R4
 
 # R3
 sudo ip netns exec R3 ip addr add 192.168.0.2/30  dev veth-R3-R1   # toward R1
 sudo ip netns exec R3 ip addr add 192.168.0.6/30  dev veth-R3-R2   # toward R2
 
+# R4
+sudo ip netns exec R4 ip addr add 192.168.0.10/30  dev veth-R4-R1
+sudo ip netns exec R4 ip addr add 192.168.0.14/30  dev veth-R4-R2
+
 # ── IP Forwarding ─────────────────────────────────────────
 sudo ip netns exec R1 sysctl -w net.ipv4.ip_forward=1
 sudo ip netns exec R2 sysctl -w net.ipv4.ip_forward=1
 sudo ip netns exec R3 sysctl -w net.ipv4.ip_forward=1
+sudo ip netns exec R4 sysctl -w net.ipv4.ip_forward=1
 
 # ── Routing ───────────────────────────────────────────────
 # Hosts: default GW = their local router
@@ -99,16 +121,21 @@ sudo ip netns exec H21 ip route add default via 10.0.2.254
 sudo ip netns exec H22 ip route add default via 10.0.2.254
 
 # R1: unknown traffic → R3
-sudo ip netns exec R1 ip route add default via 192.168.0.2
+sudo ip netns exec R1 ip route add 10.0.2.0/24 via 192.168.0.2  # via R3
 
-# R2: unknown traffic → R3
-sudo ip netns exec R2 ip route add default via 192.168.0.6
+# R2: unknown traffic → R4
+sudo ip netns exec R2 ip route add 10.0.1.0/24 via 192.168.0.14 # via R4
 
 # R3: explicit routes to each LAN
-sudo ip netns exec R3 ip route add 10.0.1.0/24 via 192.168.0.1   # via R1
-sudo ip netns exec R3 ip route add 10.0.2.0/24 via 192.168.0.5   # via R2
+sudo ip netns exec R3 ip route add 10.0.1.0/24 via 192.168.0.1 # via R1
+sudo ip netns exec R3 ip route add 10.0.2.0/24 via 192.168.0.5 # via R2
+
+# R4: conosce entrambe le LAN
+sudo ip netns exec R4 ip route add 10.0.1.0/24 via 192.168.0.9 # via R1
+sudo ip netns exec R4 ip route add 10.0.2.0/24 via 192.168.0.13 # via R2
 
 # ── Test Connectivity ─────────────────────────────────────
 sudo ip netns exec H11 ping -c3 10.0.1.2    # H11 → H12 (same LAN)
 sudo ip netns exec H11 ping -c3 10.0.2.1    # H11 → H21 (cross LAN)
-sudo ip netns exec H11 ping -c3 10.0.2.2    # H11 → H22 (cross LAN)
+sudo ip netns exec H21 ping -c3 10.0.2.2    # H21 → H22 (same LAN)
+sudo ip netns exec H21 ping -c3 10.0.1.2    # H21 → H12 (cross LAN)
